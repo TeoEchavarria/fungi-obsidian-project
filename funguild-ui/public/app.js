@@ -447,6 +447,17 @@ function openModal(detail) {
   grid.appendChild(rightCol);
   modalBody.appendChild(grid);
 
+  // Check Permissions for Edit Button
+  const btnEdit = el("btnEditRecord");
+  if (AuthService.user && state.userProfile?.can_edit) {
+    btnEdit.style.display = "block";
+    btnEdit.onclick = () => {
+      alert(`Editing Record ${detail.guid}\n\n(This would open the editor if the backend supported writes. You have permission!)`);
+    };
+  } else {
+    btnEdit.style.display = "none";
+  }
+
   modalBackdrop.style.display = "flex";
 }
 
@@ -496,9 +507,119 @@ async function loadSqliteDb() {
     // 2. Load initial rows
     loadRows();
 
+    // 3. Initialize Auth
+    AuthService.initApp();
+
   } catch (err) {
     console.error(err);
     statusEl.textContent = "Error";
     metaText.textContent = String(err?.message ?? err);
   }
 })();
+
+// --- Authentication Logic ---
+
+const authModal = el("authModalBackdrop");
+const btnAuth = el("btnAuth");
+const btnLogout = el("btnLogout");
+const btnAuthClose = el("btnAuthClose");
+const authTabs = document.querySelectorAll(".auth-tab");
+const forms = {
+  login: el("formLogin"),
+  register: el("formRegister")
+};
+const authMessage = el("authMessage");
+const editorBadge = el("editorBadge");
+
+// Open/Close Modal
+btnAuth.addEventListener("click", () => {
+  if (AuthService.user) return; // Should be logout button usually
+  authModal.style.display = "flex";
+  authMessage.textContent = "";
+});
+btnAuthClose.addEventListener("click", () => authModal.style.display = "none");
+authModal.addEventListener("click", (e) => {
+  if (e.target === authModal) authModal.style.display = "none";
+});
+
+// Switch Tabs
+authTabs.forEach(tab => {
+  tab.addEventListener("click", () => {
+    // UI toggle
+    authTabs.forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+
+    // Form toggle
+    const target = tab.dataset.tab;
+    Object.values(forms).forEach(f => f.classList.remove("active"));
+    forms[target].classList.add("active");
+    authMessage.textContent = "";
+  });
+});
+
+// Login Submit
+forms.login.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = el("loginEmail").value;
+  const pass = el("loginPass").value;
+  authMessage.textContent = "Logging in...";
+
+  try {
+    await AuthService.login(email, pass);
+    authModal.style.display = "none";
+    // Clear forms
+    el("loginPass").value = "";
+  } catch (err) {
+    authMessage.textContent = "Login failed: " + err.message;
+  }
+});
+
+// Register Submit
+forms.register.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = el("regEmail").value;
+  const pass = el("regPass").value;
+  const just = el("regJustification").value;
+  authMessage.textContent = "Registering...";
+
+  try {
+    await AuthService.register(email, pass, just);
+    authModal.style.display = "none";
+    alert("Registration successful! Your request has been submitted for review.");
+  } catch (err) {
+    authMessage.textContent = "Registration failed: " + err.message;
+  }
+});
+
+// Logout
+btnLogout.addEventListener("click", async () => {
+  await AuthService.logout();
+});
+
+// Auth State Listener
+AuthService.subscribeToAuth(async (user) => {
+  if (user) {
+    // Logged In
+    btnAuth.style.display = "none";
+    btnLogout.style.display = "inline-block";
+    btnLogout.textContent = "Logout (" + user.profile.email + ")";
+
+    // Fetch Permissions
+    // We store profile in state to access it in openModal
+    const profile = await AuthService.getProfile();
+    state.userProfile = profile;
+
+    if (profile && profile.can_edit) {
+      editorBadge.style.display = "inline-block";
+    } else {
+      editorBadge.style.display = "none";
+    }
+
+  } else {
+    // Logged Out
+    btnAuth.style.display = "inline-block";
+    btnLogout.style.display = "none";
+    editorBadge.style.display = "none";
+    state.userProfile = null;
+  }
+});

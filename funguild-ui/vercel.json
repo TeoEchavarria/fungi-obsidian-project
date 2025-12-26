@@ -1,18 +1,4 @@
 {
-    "version": 2,
-    "public": true,
-    "builds": [
-        {
-            "src": "public/**",
-            "use": "@vercel/static"
-        }
-    ],
-    "routes": [
-        {
-            "src": "/(.*)",
-            "dest": "/public/$1"
-        }
-    ],
     "headers": [
         {
             "source": "/(.*)\\.wasm",
