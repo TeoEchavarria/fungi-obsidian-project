@@ -1,5 +1,7 @@
 # FunGuild Obsidian Project
 
+> **🌐 Live Application**: [https://fungi-obsidian-project.vercel.app/](https://fungi-obsidian-project.vercel.app/)
+
 A modern web application for exploring and analyzing fungal guild data from the FUNGuild database.
 
 ## Overview
