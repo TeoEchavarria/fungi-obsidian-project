@@ -106,7 +106,8 @@
       border-color: transparent;
     }
 
-    .actions {
+    .actions,
+    .filter-actions {
       display: flex;
       gap: 8px;
     }
@@ -359,16 +360,26 @@
         display: grid;
       }
 
-      .actions {
+      .filter-actions {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr;
+        /* Stack on mobile */
+        gap: 8px;
         width: 100%;
         margin-top: 8px;
       }
 
-      .actions button {
+      .filter-actions button {
         width: 100%;
         justify-content: center;
+      }
+
+      /* Fix Modal Header on Mobile */
+      .modal-header .actions {
+        display: flex;
+        width: auto;
+        margin-top: 0;
+        gap: 8px;
       }
 
       /* Table to Card Transformation */
@@ -401,13 +412,15 @@
       }
 
       td {
-        padding: 10px 14px;
+        padding: 12px 14px;
         border-bottom: 1px solid #f0f0f0;
         display: flex;
         justify-content: space-between;
         align-items: center;
         text-align: right;
         white-space: normal;
+        gap: 16px;
+        /* Ensure space between label and value */
       }
 
       td:last-child {
@@ -421,22 +434,16 @@
         color: var(--text-sub);
         text-transform: uppercase;
         font-weight: 700;
-        margin-right: 12px;
         text-align: left;
         flex-shrink: 0;
       }
 
       td[data-label="Taxon"] {
-        font-weight: 700;
-        font-size: 16px;
-        color: var(--primary);
         background: #fafafa;
-        display: block;
-        text-align: left;
-      }
-
-      td[data-label="Taxon"]::before {
-        display: none;
+        font-size: 15px;
+        /* Slightly larger for emphasis */
+        color: var(--primary);
+        font-weight: 700;
       }
 
       /* Pagination */
@@ -888,9 +895,8 @@
           <option value="">(Any)</option>
         </select>
       </div>
-      <div class="actions">
-        <button id="btnApply">Apply</button>
-        <button id="btnReset" class="secondary">Reset</button>
+      <div class="filter-actions">
+        <button id="btnReset" class="secondary">Reset Filters</button>
       </div>
     </div>
 

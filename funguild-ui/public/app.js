@@ -50,11 +50,6 @@ el("btnReset").addEventListener("click", () => {
   onFilterChange();
 });
 
-// "Apply" button (optional now, but good for explicit action)
-el("btnApply").addEventListener("click", () => {
-  onFilterChange();
-});
-
 // Attach listeners to inputs for auto-cascading behavior
 // For select dropdowns: change immediately triggers update
 [fTrophicMode, fGrowthForm, fGuild].forEach(input => {
@@ -67,9 +62,16 @@ el("btnApply").addEventListener("click", () => {
 // For text input: use 'input' with debounce or just 'change' (blur/enter).
 // To be "faceted search" style, usually 'input' + debounce is best, but strictly 'change' is safer for performance without debounce.
 // Let's use 'change' for now to be safe with SQL.
-fTaxon.addEventListener("change", () => {
+fTaxon.addEventListener("input", () => {
   state.offset = 0;
   onFilterChange();
+});
+
+fTaxon.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") {
+    state.offset = 0;
+    onFilterChange();
+  }
 });
 
 // Pagination
