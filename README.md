@@ -1,0 +1,1 @@
+# fungi-obsidian-project
