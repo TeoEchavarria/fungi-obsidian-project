@@ -360,36 +360,92 @@ function openModal(detail) {
   modalTitle.textContent = detail.taxon ? `${detail.taxon}` : `Record ${detail.guid}`;
   modalBody.innerHTML = "";
 
-  const keys = Object.keys(detail).sort((a, b) => {
-    // Custom sort order: guid first, taxon second, then alphabetical
-    const pri = (k) => (k === "guid" ? 0 : k === "taxon" ? 1 : 2);
-    const pa = pri(a), pb = pri(b);
-    if (pa !== pb) return pa - pb;
-    return a.localeCompare(b);
+  // Container
+  const grid = document.createElement("div");
+  grid.className = "modal-grid";
+
+  // --- Left Column (Narrative) ---
+  const leftCol = document.createElement("div");
+  leftCol.className = "modal-col-left";
+
+  // Image Placeholder
+  const imgPlaceholder = document.createElement("div");
+  imgPlaceholder.className = "placeholder-image";
+  imgPlaceholder.textContent = "No Image";
+  leftCol.appendChild(imgPlaceholder);
+
+  // Notes
+  if (detail.notes) {
+    const notesTitle = document.createElement("span");
+    notesTitle.className = "section-title";
+    notesTitle.textContent = "Notes";
+
+    const notesBody = document.createElement("div");
+    notesBody.className = "text-block";
+    notesBody.textContent = detail.notes;
+
+    leftCol.appendChild(notesTitle);
+    leftCol.appendChild(notesBody);
+  }
+
+  // Citation Source
+  if (detail.citationSource) {
+    const citTitle = document.createElement("span");
+    citTitle.className = "section-title";
+    citTitle.textContent = "Citation Source";
+
+    const citBody = document.createElement("div");
+    citBody.className = "text-block";
+    citBody.innerHTML = renderCitationSource(detail.citationSource);
+
+    leftCol.appendChild(citTitle);
+    leftCol.appendChild(citBody);
+  }
+
+  // --- Right Column (Metadata) ---
+  const rightCol = document.createElement("div");
+  rightCol.className = "modal-col-right";
+
+  // Define fields to show in order
+  const metaFields = [
+    "taxon",
+    "guid",
+    "mbNumber",
+    "taxonomicLevel",
+    "trophicMode",
+    "guild",
+    "growthForm",
+    "confidenceRanking",
+    "trait",
+    "ingested_at"
+  ];
+
+  metaFields.forEach(key => {
+    const val = detail[key];
+    // Show only if meaningful? The prompt says "Display all remaining fields". 
+    // We will display them (showing NULL if empty is fine or we can skip empty ones).
+    // Let's stick to showing them to be explicit.
+
+    const row = document.createElement("div");
+    row.className = "kv-pair";
+
+    const label = document.createElement("div");
+    label.className = "kv-label";
+    label.textContent = key;
+
+    const value = document.createElement("div");
+    value.className = "kv-value";
+    value.textContent = (val === null || val === undefined || val === "") ? "—" : String(val);
+
+    row.appendChild(label);
+    row.appendChild(value);
+    rightCol.appendChild(row);
   });
 
-  for (const k of keys) {
-    const row = document.createElement("div");
-    row.className = "kv";
-
-    const keyEl = document.createElement("div");
-    keyEl.className = "k";
-    keyEl.textContent = k;
-
-    const valEl = document.createElement("div");
-    valEl.className = "v";
-
-    // Special handling for citationSource
-    if (k === "citationSource") {
-      valEl.innerHTML = renderCitationSource(detail[k]);
-    } else {
-      valEl.textContent = detail[k] == null ? "NULL" : String(detail[k]);
-    }
-
-    row.appendChild(keyEl);
-    row.appendChild(valEl);
-    modalBody.appendChild(row);
-  }
+  // Assemble
+  grid.appendChild(leftCol);
+  grid.appendChild(rightCol);
+  modalBody.appendChild(grid);
 
   modalBackdrop.style.display = "flex";
 }
