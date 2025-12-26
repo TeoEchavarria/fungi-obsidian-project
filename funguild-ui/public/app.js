@@ -38,10 +38,6 @@ el("btnClose").addEventListener("click", closeModal);
 modalBackdrop.addEventListener("click", (e) => {
   if (e.target === modalBackdrop) closeModal();
 });
-el("btnCopy").addEventListener("click", async () => {
-  if (!state.lastDetail) return;
-  await navigator.clipboard.writeText(JSON.stringify(state.lastDetail, null, 2));
-});
 
 // --- Event Listeners for Filters ---
 // "Reset" button
