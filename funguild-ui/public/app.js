@@ -296,12 +296,72 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+/**
+ * Transforms citation text into safe HTML with clickable links.
+ * Detects http(s) URLs and wraps them in <a> tags.
+ * Handles trailing punctuation/parentheses robustly.
+ */
+function renderCitationSource(text) {
+  if (!text) return "—";
+
+  // Regex to find potential URLs starting with http:// or https://
+  // We grab non-whitespace chars aggressively, then clean up trailing chars.
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+  // Split text by URL patterns
+  // split with capture group returns [text, url, text, url...]
+  const parts = text.split(urlRegex);
+
+  return parts.map((part, index) => {
+    // Even indices are plain text
+    if (index % 2 === 0) {
+      return escapeHtml(part);
+    }
+
+    // Odd indices are potential URLs matches
+    let url = part;
+    let trailing = "";
+
+    // Heuristic: move trailing punctuation out of the URL
+    // Loop while the url ends with a common punctuation mark or unbalanced parens
+    while (true) {
+      const lastChar = url.slice(-1);
+
+      // Common sentence punctuation that is rarely part of a URL
+      if ([".", ",", ";", "!", "?"].includes(lastChar)) {
+        trailing = lastChar + trailing;
+        url = url.slice(0, -1);
+        continue;
+      }
+
+      // Balanced parentheses check
+      // If URL ends in ')', check if it contains a matching '('
+      if (lastChar === ")") {
+        const openCount = (url.match(/\(/g) || []).length;
+        const closeCount = (url.match(/\)/g) || []).length;
+        if (closeCount > openCount) {
+          trailing = lastChar + trailing;
+          url = url.slice(0, -1);
+          continue;
+        }
+      }
+
+      break;
+    }
+
+    // Now render the link + the stripped trailing text
+    return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>${escapeHtml(trailing)}`;
+
+  }).join("");
+}
+
 function openModal(detail) {
   state.lastDetail = detail;
   modalTitle.textContent = detail.taxon ? `${detail.taxon}` : `Record ${detail.guid}`;
   modalBody.innerHTML = "";
 
   const keys = Object.keys(detail).sort((a, b) => {
+    // Custom sort order: guid first, taxon second, then alphabetical
     const pri = (k) => (k === "guid" ? 0 : k === "taxon" ? 1 : 2);
     const pa = pri(a), pb = pri(b);
     if (pa !== pb) return pa - pb;
@@ -318,7 +378,13 @@ function openModal(detail) {
 
     const valEl = document.createElement("div");
     valEl.className = "v";
-    valEl.textContent = detail[k] == null ? "NULL" : String(detail[k]);
+
+    // Special handling for citationSource
+    if (k === "citationSource") {
+      valEl.innerHTML = renderCitationSource(detail[k]);
+    } else {
+      valEl.textContent = detail[k] == null ? "NULL" : String(detail[k]);
+    }
 
     row.appendChild(keyEl);
     row.appendChild(valEl);
