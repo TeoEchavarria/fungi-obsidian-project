@@ -1,81 +1,92 @@
-class PaneManager {
-    constructor({ laneEl, fetchRecord, renderRecordCard }) {
-        this.laneEl = laneEl;
+class CardCanvasManager {
+    constructor({ canvasEl, fetchRecord, renderRecordCard }) {
+        this.canvasEl = canvasEl;
         this.fetchRecord = fetchRecord;           // async (guid) => record
-        this.renderRecordCard = renderRecordCard; // (record, paneIndex) => HTMLElement
+        this.renderRecordCard = renderRecordCard; // (record) => HTMLElement
         this.cache = new Map();                   // guid -> record
-        this.openStack = [];                      // array of guids in order
+        this.openCards = new Map();               // guid -> { el, record }
+        this.openOrder = [];                      // array of guids in order
     }
 
-    async open(guid, paneIndex = 0) {
+    async openCard(guid) {
         if (!guid) return;
 
-        // If opening at index, remove everything to the right.
-        this.openStack = this.openStack.slice(0, paneIndex);
-        this.openStack[paneIndex] = guid;
+        // 1. Check if already open
+        if (this.openCards.has(guid)) {
+            this.focusCard(guid);
+            return;
+        }
 
-        // Render immediately placeholder to avoid "empty gap"
-        this._renderPlaceholders();
-
-        // Fetch record (cached)
+        // 2. Fetch record (cached)
         let rec = this.cache.get(guid);
         if (!rec) {
             rec = await this.fetchRecord(guid);
             if (!rec) {
-                this._renderError(guid, paneIndex);
+                this._renderError(guid);
                 return;
             }
             this.cache.set(guid, rec);
         }
 
-        // Replace pane DOM
-        this._setPaneEl(paneIndex, this.renderRecordCard(rec, paneIndex));
+        // 3. Render
+        const cardEl = this.renderRecordCard(rec);
+        cardEl.classList.add('card--enter');
 
-        // Auto-scroll lane to the newly opened pane
-        this._scrollToPane(paneIndex);
+        // 4. Append to canvas
+        this.canvasEl.appendChild(cardEl);
+        this.openCards.set(guid, { el: cardEl, record: rec });
+        this.openOrder.push(guid);
+
+        // 5. Scroll to new card
+        this._scrollToCard(cardEl);
     }
 
-    _renderPlaceholders() {
-        // Ensure lane has N panes
-        while (this.laneEl.children.length < this.openStack.length) {
-            const sk = document.createElement("div");
-            sk.className = "note-card";
-            sk.innerHTML = `<div class="note-card__hdr"><div class="note-card__title">Loading…</div></div>`;
-            this.laneEl.appendChild(sk);
+    closeCard(guid) {
+        const cardData = this.openCards.get(guid);
+        if (cardData) {
+            cardData.el.remove();
+            this.openCards.delete(guid);
+            this.openOrder = this.openOrder.filter(g => g !== guid);
         }
-        // Remove extra panes in DOM if stack shrank
-        while (this.laneEl.children.length > this.openStack.length) {
-            this.laneEl.removeChild(this.laneEl.lastElementChild);
-        }
-    }
 
-    _setPaneEl(index, el) {
-        const old = this.laneEl.children[index];
-        if (old) {
-            this.laneEl.replaceChild(el, old);
-        } else {
-            this.laneEl.appendChild(el);
+        // Auto-close modal if no cards left
+        if (this.openCards.size === 0 && window.SharedUI) {
+            window.SharedUI.closeModal();
         }
     }
 
-    _renderError(guid, index) {
+    focusCard(guid) {
+        const cardData = this.openCards.get(guid);
+        if (cardData) {
+            this._scrollToCard(cardData.el);
+            cardData.el.classList.add('card--pulse');
+            setTimeout(() => cardData.el.classList.remove('card--pulse'), 1000);
+        }
+    }
+
+    _scrollToCard(el) {
+        el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
+
+    _renderError(guid) {
         const el = document.createElement("article");
-        el.className = "note-card";
+        el.className = "card card--enter";
         el.innerHTML = `
-      <div class="note-card__hdr">
-        <div class="note-card__title">Not found</div>
-        <div class="note-card__meta">guid: ${this._escapeHtml(guid)}</div>
-      </div>
-      <div class="note-card__body">
+      <header class="card-header">
+        <div>
+          <h2 class="card-title">Not found</h2>
+          <div class="card-subtitle">guid: ${this._escapeHtml(guid)}</div>
+        </div>
+        <button class="card-close" data-action="close-card" data-guid="${this._escapeHtml(guid)}">×</button>
+      </header>
+      <div class="card-body">
         <p>Record not found in SQLite.</p>
       </div>`;
-        this._setPaneEl(index, el);
-    }
+        this.canvasEl.appendChild(el);
+        this._scrollToCard(el);
 
-    _scrollToPane(index) {
-        const pane = this.laneEl.children[index];
-        if (!pane) return;
-        pane.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+        // Listen for close on error card too
+        el.querySelector('[data-action="close-card"]').onclick = () => el.remove();
     }
 
     _escapeHtml(s) {
@@ -87,3 +98,6 @@ class PaneManager {
             .replaceAll("'", "&#039;");
     }
 }
+
+// Support legacy naming during transition if needed, but we'll update scripts
+window.CardCanvasManager = CardCanvasManager;

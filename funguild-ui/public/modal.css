@@ -15,15 +15,16 @@
 }
 
 .modal {
-    background: #fff;
-    width: 90%;
-    max-width: 800px;
-    max-height: 85vh;
-    border-radius: 12px;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    animation: modalIn 0.3s ease-out;
+    background: transparent !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-shadow: none !important;
+    border: none !important;
+    animation: none !important;
 }
 
 @keyframes modalIn {
@@ -39,13 +40,7 @@
 }
 
 .modal-header {
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: var(--bg-alt);
-    border-radius: 12px 12px 0 0;
+    display: none !important;
 }
 
 .modal-header strong {
@@ -55,10 +50,14 @@
 }
 
 .modal-body {
-    padding: 24px;
-    overflow-y: auto;
-    background: #fff;
-    border-radius: 0 0 12px 12px;
+    padding: 0 !important;
+    overflow: hidden !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: stretch !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 .modal-grid {
@@ -304,42 +303,140 @@
     }
 }
 
-/* --- Lane type Matuschak --- */
+/* --- Zettelkasten Card Canvas --- */
+.card-canvas,
 .note-lane {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(320px, 440px);
-    gap: 14px;
-    padding: 12px;
+    display: flex;
+    flex-direction: row;
+    gap: 40px;
+    padding: 60px 40px;
     overflow-x: auto;
     overflow-y: hidden;
-    scroll-snap-type: x mandatory;
+    width: 100vw;
+    height: 100vh;
+    align-items: center;
+    justify-content: center;
+    /* Always Centered */
+    background: transparent !important;
+    /* No background for the canvas itself */
+    scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
-    align-items: start;
-    height: 100%;
+    border: none !important;
+    box-shadow: none !important;
 }
 
-.note-card {
-    scroll-snap-align: start;
-    border: 1px solid #e7e7e7;
-    border-radius: 16px;
+.card {
+    flex: 0 0 auto;
+    width: 460px;
+    max-width: 85vw;
     background: #fff;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, .06);
-    overflow: hidden;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.note-card__body {
-    padding: 16px;
-    max-height: calc(85vh - 40px);
-    overflow: auto;
+.card-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fff;
+}
+
+.card-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0;
+    color: #111;
+}
+
+.card-subtitle {
+    font-size: 11px;
+    color: #888;
+    margin-top: 2px;
+}
+
+.card-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    line-height: 1;
+    color: #333;
+    /* Darker for better visibility */
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 6px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.card-close:hover {
+    background: #f5f5f5;
+    color: #333;
+}
+
+.card-body {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(85vh - 60px);
+}
+
+/* Animations */
+@keyframes cardEnter {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.card--enter {
+    animation: cardEnter 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes cardPulse {
+    0% {
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 0 0 0px var(--primary);
+    }
+
+    50% {
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.12), 0 0 0 4px var(--primary);
+    }
+
+    100% {
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 0 0 0px var(--primary);
+    }
+}
+
+.card--pulse {
+    animation: cardPulse 0.8s ease-out;
+    z-index: 10;
+}
+
+/* Mobile Responsive Adjustments */
+@media (max-width: 768px) {
+    .card-canvas {
+        padding: 10px;
+        gap: 12px;
+    }
+
+    .card {
+        width: 320px;
+    }
 }
 
 .record-title {
-    font-size: 24px;
-    font-weight: 750;
-    margin: 0 0 4px 0;
+    font-size: 26px;
+    font-weight: 800;
+    margin: 0 0 6px 0;
     line-height: 1.1;
     color: #111;
 }
@@ -347,28 +444,9 @@
 .record-subtitle {
     font-size: 13px;
     color: #888;
-    margin-bottom: 20px;
-}
-
-.parent-link {
-    color: #0066cc;
-    text-decoration: none;
-    cursor: pointer;
-}
-
-.parent-link:hover {
-    text-decoration: underline;
-}
-
-.linklike {
-    border: 0;
-    background: transparent;
-    color: #111;
-    padding: 0;
-    text-decoration: underline;
-    cursor: pointer;
-    font: inherit;
-    text-align: left;
+    margin-bottom: 24px;
+    display: none;
+    /* Subtext is now in card header */
 }
 
 .kv {

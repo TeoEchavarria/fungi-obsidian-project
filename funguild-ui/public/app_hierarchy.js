@@ -4,6 +4,9 @@
  */
 
 (function () {
+    const state = window.appState;
+    const escapeHtml = SharedUI.escapeHtml;
+
     window.renderRecordCardHook = function (cardEl, detail) {
         // Use sanitized GUID for slot matching
         const slotIdSuffix = detail.guid.replace(/[^a-z0-9]/gi, '_');
@@ -27,7 +30,7 @@
         let isClickable = false;
 
         if (parent.kind === "record") {
-            const p = queryOne(`SELECT taxon FROM ${state.table} WHERE guid = :p`, { ":p": parent.guid });
+            const p = window.queryOne(`SELECT taxon FROM ${state.table} WHERE guid = :p`, { ":p": parent.guid });
             if (p) {
                 currentParentTaxon = p.taxon;
                 isClickable = true;
@@ -59,13 +62,8 @@
             if (link) {
                 e.preventDefault();
                 const guid = link.dataset.openGuid;
-                const card = link.closest(".note-card");
-                // We need the paneIndex. We can find it by looking at the parent .note-lane children
-                const lane = document.getElementById("noteLane");
-                const panes = Array.from(lane.children);
-                const paneIndex = panes.indexOf(card);
-                if (paneIndex !== -1 && state.paneManager) {
-                    state.paneManager.open(guid, paneIndex + 1);
+                if (state.cardCanvasManager) {
+                    state.cardCanvasManager.openCard(guid);
                 }
             }
         });
@@ -96,7 +94,7 @@
                     return;
                 }
 
-                const candidates = queryAll(
+                const candidates = window.queryAll(
                     `SELECT guid, taxon, taxonomicLevel FROM ${state.table} 
                          WHERE taxon LIKE :q AND guid != :self 
                          ORDER BY taxon ASC LIMIT 10`,

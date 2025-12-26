@@ -97,7 +97,8 @@ const SharedUI = (function () {
                 AuthService.getProfile().then(profile => {
                     if (profile && profile.can_edit) {
                         if (editorBadge) editorBadge.style.display = "inline-block";
-                        if (state) state.userProfile = profile;
+                        const s = state || window.appState;
+                        if (s) s.userProfile = profile;
                     }
                 });
             } else {
@@ -361,40 +362,41 @@ const SharedUI = (function () {
     }
 
     function loadDetail(guid, state) {
-        if (!state.paneManager) {
-            const laneEl = document.getElementById("noteLane");
-            state.paneManager = new PaneManager({
-                laneEl,
-                fetchRecord: (guid) => queryOne(`SELECT * FROM funguild WHERE guid = :guid LIMIT 1`, { ":guid": guid }),
+        if (!state.cardCanvasManager) {
+            const canvasEl = document.getElementById("noteLane");
+            state.cardCanvasManager = new CardCanvasManager({
+                canvasEl,
+                fetchRecord: (guid) => window.queryOne(`SELECT * FROM funguild WHERE guid = :guid LIMIT 1`, { ":guid": guid }),
                 renderRecordCard: null,
             });
-            state.paneManager.renderRecordCard = renderRecordCardFactory(state);
+            state.cardCanvasManager.renderRecordCard = renderRecordCardFactory(state);
         }
 
         const modalBackdrop = document.getElementById("modalBackdrop");
         if (modalBackdrop.style.display !== "flex") {
             modalBackdrop.style.display = "flex";
-            const modal = modalBackdrop.querySelector(".modal");
-            if (modal) {
-                modal.style.width = "95vw";
-                modal.style.maxWidth = "none";
-            }
         }
 
-        state.paneManager.open(guid, 0);
+        state.cardCanvasManager.openCard(guid);
     }
 
     function renderRecordCardFactory(state) {
-        return function renderRecordCard(rec, paneIndex) {
+        return function renderRecordCard(rec) {
             const el = document.createElement("article");
-            el.className = "note-card";
+            el.className = "card";
+            el.dataset.guid = rec.guid;
 
             el.innerHTML = `
-      <div class="note-card__body">
-        <h2 class="record-title">${escapeHtml(rec.taxon || rec.guid)}</h2>
-        <div class="record-subtitle">
-            Level: ${escapeHtml(rec.taxonomicLevel ?? "—")} &bull; GUID: ${escapeHtml(rec.guid)}
+      <header class="card-header">
+        <div>
+          <h2 class="card-title">${escapeHtml(rec.taxon || "Unknown")}</h2>
+          <div class="card-subtitle">Level: ${escapeHtml(rec.taxonomicLevel ?? "—")} &bull; GUID: ${escapeHtml(rec.guid)}</div>
         </div>
+        <button class="card-close" data-action="close-card" title="Close this card">×</button>
+      </header>
+
+      <div class="card-body">
+        <h2 class="record-title">${escapeHtml(rec.taxon || rec.guid)}</h2>
 
         <div style="display:grid; grid-template-columns: 1fr 1.2fr; gap: 24px; margin-top: 16px;">
           <!-- LEFT column -->
@@ -442,17 +444,18 @@ const SharedUI = (function () {
                 window.renderRecordCardHook(el, rec);
             }
 
+            // Card individual close
+            el.querySelector('[data-action="close-card"]').addEventListener("click", (e) => {
+                e.stopPropagation();
+                state.cardCanvasManager.closeCard(rec.guid);
+            });
+
+            // Handle parent link clicks (if any rendered by hooks)
             el.addEventListener("click", (e) => {
-                const t = e.target;
-                if (t && t.dataset && t.dataset.openGuid) {
-                    state.paneManager.open(t.dataset.openGuid, paneIndex + 1);
-                    return;
-                }
-                if (t && t.dataset && t.dataset.action === "close-pane") {
-                    state.paneManager.openStack = state.paneManager.openStack.slice(0, paneIndex);
-                    state.paneManager._renderPlaceholders();
-                    // If closing the first pane, close modal
-                    if (paneIndex === 0) closeModal();
+                const t = e.target.closest('[data-open-guid]');
+                if (t) {
+                    e.preventDefault();
+                    state.cardCanvasManager.openCard(t.dataset.openGuid);
                 }
             });
 

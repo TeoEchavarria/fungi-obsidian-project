@@ -1,12 +1,13 @@
 /* global initSqlJs, HierarchyUtils, AuthService, SharedUI */
 
-const state = {
+window.appState = {
     db: null,
     table: "funguild",
     hierarchyOverrides: {},
     userProfile: null,
-    paneManager: null,
+    cardCanvasManager: null,
 };
+const state = window.appState;
 
 const el = (id) => document.getElementById(id);
 const statusEl = el("status");
@@ -64,19 +65,33 @@ function queryAll(sql, params = {}) {
         return [];
     }
 }
+window.queryAll = queryAll;
 
 function queryOne(sql, params = {}) {
     const rows = queryAll(sql, params);
     return rows.length ? rows[0] : null;
 }
+window.queryOne = queryOne;
 
 /**
  * Hierarchical data fetching
  */
 async function getChildren(parentGuid) {
+    const isAnchor = parentGuid === 'F_0000000000_ANCHOR_FUNGI';
+
     const sql = `SELECT * FROM ${state.table} WHERE parent_guid ${parentGuid ? "= :p" : "IS NULL"} ORDER BY taxon ASC`;
     const params = parentGuid ? { ":p": parentGuid } : {};
     let children = queryAll(sql, params);
+
+    // If we are looking for children of the anchor, also include Level 3 orphans (no parent)
+    if (isAnchor) {
+        const orphans = queryAll(`SELECT * FROM ${state.table} WHERE taxonomicLevel = 3 AND (parent_guid IS NULL OR parent_guid = '' OR parent_guid = 'NULL')`);
+        orphans.forEach(o => {
+            if (!children.find(c => c.guid === o.guid)) {
+                children.push(o);
+            }
+        });
+    }
 
     // Apply Overrides
     children = children.filter(c => {

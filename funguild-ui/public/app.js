@@ -1,6 +1,6 @@
 /* global initSqlJs */
 
-const state = {
+window.appState = {
   db: null,
   table: "funguild",
   limit: 50,
@@ -8,17 +8,19 @@ const state = {
   total: 0,
   lastDetail: null,
   hierarchyOverrides: {},
-  paneManager: null,
+  cardCanvasManager: null,
 };
+const state = window.appState;
 function getParentMap() {
   const map = {};
   // 1. Get from DB
-  const rows = queryAll(`SELECT guid, parent_guid FROM funguild WHERE parent_guid IS NOT NULL`);
+  const rows = window.queryAll(`SELECT guid, parent_guid FROM funguild WHERE parent_guid IS NOT NULL`);
   rows.forEach(r => map[r.guid] = r.parent_guid);
   // 2. Overlay with MongoDB overrides
   Object.assign(map, state.hierarchyOverrides);
   return map;
 }
+window.getParentMap = getParentMap;
 
 const el = (id) => document.getElementById(id);
 
@@ -241,11 +243,13 @@ function queryAll(sql, params = {}) {
     return [];
   }
 }
+window.queryAll = queryAll;
 
 function queryOne(sql, params = {}) {
   const rows = queryAll(sql, params);
   return rows.length ? rows[0] : null;
 }
+window.queryOne = queryOne;
 
 function loadRows() {
   metaText.textContent = "Loading…";
