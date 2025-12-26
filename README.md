@@ -30,7 +30,9 @@ This project provides an interactive interface to browse, search, and filter fun
 - 🎯 **Multi-filter System**: Filter by trophic mode, guild, growth form, and confidence ranking
 - 📊 **Interactive Table**: Sortable columns with detailed information
 - 🌐 **Client-side Database**: Fast queries using SQL.js (SQLite in the browser)
-- 🔐 **Authentication**: Secure access with Supabase integration
+- 🔐 **Authentication**: Secure access with MongoDB user management
+- 💬 **Comments**: Authenticated users can annotate and discuss individual records
+
 
 ## Documentation
 
@@ -42,6 +44,8 @@ For detailed information, see the [documentation folder](./docs):
 - [Web Interface](./docs/04-web-interface.md) - Frontend architecture and features
 - [API Documentation](./docs/05-api.md) - Backend API endpoints
 - [Deployment](./docs/06-deployment.md) - How to deploy the application
+- [Commenting System](./docs/07-commenting.md) - How to use and manage comments
+
 
 ## Project Structure
 
