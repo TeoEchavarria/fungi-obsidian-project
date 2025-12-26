@@ -29,7 +29,7 @@ import requests
 # --- Configuration & Defaults ---
 
 DEFAULT_URL = "http://www.stbates.org/funguild_db.php"
-DEFAULT_DB_PATH = "./funguild.sqlite"
+DEFAULT_DB_PATH = "../funguild.sqlite"
 DEFAULT_TABLE = "funguild"
 DEFAULT_TIMEOUT = 30
 DEFAULT_USER_AGENT = "funguild-ingestor/1.0"

@@ -41,7 +41,7 @@ The database contains records with the following key information:
 
 The FUNGuild database is community-maintained and updated periodically. To get the latest data:
 
-1. Run the ingestion script: `python ingest_funguild.py`
+1. Run the ingestion script: `python scripts/ingest_funguild.py`
 2. The script will fetch the latest data from the API
 3. Records are upserted into the local SQLite database
 

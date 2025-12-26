@@ -2,15 +2,15 @@
 
 ## Overview
 
-The data extraction process uses a Python script ([ingest_funguild.py](../ingest_funguild.py)) to fetch data from the FUNGuild API and populate a local SQLite database.
+The data extraction process uses Python scripts (located in `scripts/`) to fetch data from the FUNGuild and NemaGuild APIs and populate a local SQLite database.
 
 ## The Ingestion Script
 
 ### Purpose
 
-The `ingest_funguild.py` script is a production-quality Python 3.11+ tool that:
+The ingestion scripts are production-quality Python 3.11+ tools that:
 
-1. Downloads the FUNGuild dataset from the HTTP API
+1. Download the datasets from the HTTP APIs
 2. Parses JSON data (with fallback for mixed HTML/JSON responses)
 3. Normalizes and validates records
 4. Upserts data into a SQLite database with atomic transactions
@@ -31,22 +31,22 @@ The `ingest_funguild.py` script is a production-quality Python 3.11+ tool that:
 #### FUNGuild (Fungi)
 ```bash
 # Fetch all data and populate database
-python ingest_funguild.py
+python scripts/ingest_funguild.py
 
 # Dry run (fetch and parse but don't write to database)
-python ingest_funguild.py --dry-run
+python scripts/ingest_funguild.py --dry-run
 ```
 
 #### NemaGuild (Nematodes)
 ```bash
 # Fetch all records and merge duplicates/citations
-python ingest_nemaguild.py
+python scripts/ingest_nemaguild.py
 
 # Dry run
-python ingest_nemaguild.py --dry-run
+python scripts/ingest_nemaguild.py --dry-run
 
 # Limit records
-python ingest_nemaguild.py --limit 100
+python scripts/ingest_nemaguild.py --limit 100
 ```
 
 ### Command-Line Options

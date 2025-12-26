@@ -31,7 +31,7 @@ import requests
 # --- Configuration & Defaults ---
 
 DEFAULT_URL = "http://www.stbates.org/nemaguild_db.php"
-DEFAULT_DB_PATH = "./funguild.sqlite"
+DEFAULT_DB_PATH = "../funguild.sqlite"
 DEFAULT_TABLE = "nemaguild"
 DEFAULT_TIMEOUT = 30
 DEFAULT_USER_AGENT = "nemaguild-ingestor/1.0"

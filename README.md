@@ -51,7 +51,9 @@ For detailed information, see the [documentation folder](./docs):
 
 ```
 fungi-obsidian-project/
-├── ingest_funguild.py      # Python script to fetch and populate database
+├── scripts/                 # Ingestion scripts
+│   ├── ingest_funguild.py   # Python script to fetch fungi data
+│   └── ingest_nemaguild.py  # Python script to fetch nematode data
 ├── funguild.sqlite          # SQLite database with fungal guild data
 └── funguild-ui/             # Web application
     ├── public/              # Static files and client-side app
