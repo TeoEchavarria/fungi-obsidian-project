@@ -869,6 +869,14 @@
   </header>
 
   <div class="wrap">
+    <nav style="margin-bottom: 24px; display: flex; gap: 16px;">
+      <a href="index.html"
+        style="font-size: 14px; font-weight: 600; color: #fff; text-decoration: none; padding: 6px 12px; border-radius: 8px; background: #111;">Table
+        View</a>
+      <a href="tree.html"
+        style="font-size: 14px; font-weight: 600; color: #666; text-decoration: none; padding: 6px 12px; border-radius: 8px; transition: background 0.2s, color 0.2s;">Taxonomic
+        Tree</a>
+    </nav>
     <!-- Mobile Filter Toggle -->
     <button class="filter-toggle" id="btnToggleFilters">Filter Options ▼</button>
 
@@ -1007,7 +1015,9 @@
 
   <!-- sql.js loader -->
   <script src="./sql-wasm.js"></script>
+  <script src="./hierarchy_utils.js"></script>
   <script src="./app.js"></script>
+  <script src="./app_hierarchy.js"></script>
   <script>
     // Simple toggle for mobile filters
     document.getElementById('btnToggleFilters').addEventListener('click', function () {

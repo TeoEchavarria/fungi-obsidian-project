@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+    <title>Taxonomic Tree | Fungal Guild DB</title>
+    <link rel="stylesheet" href="tree.css">
+    <link rel="stylesheet" href="modal.css">
+    <style>
+        /* Inline styles for shared header/footer to avoid duplicating all of index.css */
+        :root {
+            --primary: #111;
+            --bg: #fff;
+            --bg-alt: #f8f9fa;
+            --border: #e0e0e0;
+            --text: #333;
+            --text-sub: #666;
+            --radius: 8px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            color: var(--text);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            padding-bottom: 45px;
+        }
+
+        header {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #fff;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        header h1 {
+            font-size: 18px;
+            margin: 0;
+            font-weight: 700;
+        }
+
+        header h1 a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .status {
+            font-size: 13px;
+            color: var(--text-sub);
+        }
+
+        .wrap {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+
+        nav {
+            margin-bottom: 24px;
+            display: flex;
+            gap: 16px;
+        }
+
+        nav a {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-sub);
+            text-decoration: none;
+            padding: 6px 12px;
+            border-radius: var(--radius);
+            transition: background 0.2s, color 0.2s;
+        }
+
+        nav a:hover {
+            background: var(--bg-alt);
+            color: var(--primary);
+        }
+
+        nav a.active {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: transparent;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            z-index: 99;
+            pointer-events: none;
+        }
+
+        footer a {
+            color: var(--text-sub);
+            text-decoration: none;
+            transition: color 0.2s;
+            pointer-events: auto;
+            font-size: 20px;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1><a href="index.html">Fungal Guild DB</a> <span id="editorBadge" class="edit-badge">EDITOR</span></h1>
+        <div class="header-right">
+            <span id="status" class="status">Loading SQLite…</span>
+            <button id="btnAuth" class="auth-btn outline">Login</button>
+            <button id="btnLogout" class="auth-btn outline" style="display:none;">Logout</button>
+        </div>
+    </header>
+
+    <div class="wrap">
+        <nav>
+            <a href="index.html">Table View</a>
+            <a href="tree.html" class="active">Taxonomic Tree</a>
+        </nav>
+
+        <div class="tree-intro">
+            <h2>Taxonomic Explorer</h2>
+            <p>Explore the taxonomic hierarchy starting from the <strong>Fungi</strong> kingdom. Click on a node to
+                expand its descendants or see details.</p>
+        </div>
+
+        <div id="tree-container" class="tree-container">
+            <div id="tree-root"></div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-backdrop" id="modalBackdrop">
+        <div class="modal" role="dialog" aria-modal="true">
+            <div class="modal-header">
+                <strong id="modalTitle">Details</strong>
+                <div class="actions">
+                    <button id="btnEditRecord" class="btn-edit-record"
+                        style="padding:6px 12px; font-size:12px; display:none;">Edit</button>
+                    <button id="btnClose" style="padding:6px 12px; font-size:12px;">Close</button>
+                </div>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Generated content goes here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div class="modal-backdrop" id="authModalBackdrop">
+        <div class="modal" role="dialog" aria-modal="true" style="width: 400px; height: auto; max-height: 90vh;">
+            <div class="modal-header">
+                <strong id="authModalTitle">Login / Register</strong>
+                <button id="btnAuthClose" style="padding:6px 12px; font-size:12px;">Close</button>
+            </div>
+            <div class="modal-body" id="authModalBody">
+                <div class="auth-tabs">
+                    <div id="tabLogin" class="auth-tab active">Login</div>
+                    <div id="tabRegister" class="auth-tab">Register</div>
+                </div>
+
+                <!-- Login Form -->
+                <div id="formLogin" class="auth-form active">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="loginEmail" placeholder="email@example.com" />
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="loginPass" />
+                    </div>
+                    <div class="form-actions">
+                        <button id="btnSubmitLogin" class="auth-btn">Log In</button>
+                    </div>
+                </div>
+
+                <!-- Register Form -->
+                <div id="formRegister" class="auth-form">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="regEmail" placeholder="email@example.com" />
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="regPass" />
+                    </div>
+                    <div class="form-group">
+                        <label>Justification (Optional)</label>
+                        <textarea id="regJustify" placeholder="Why do you need edit access?"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button id="btnSubmitRegister" class="auth-btn">Register</button>
+                    </div>
+                </div>
+                <div id="authStatus" style="margin-top: 16px; font-size: 14px; text-align: center;"></div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <a href="https://github.com/TeoEchavarria/fungi-obsidian-project" target="_blank" rel="noopener">
+            <svg height="24" width="24" viewBox="0 0 16 16" fill="currentColor">
+                <path
+                    d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z">
+                </path>
+            </svg>
+        </a>
+    </footer>
+
+    <script src="auth.js"></script>
+    <script src="sql-wasm.js"></script>
+    <script src="hierarchy_utils.js"></script>
+    <script src="shared_ui.js"></script>
+    <script src="tree.js"></script>
+    <script src="app_hierarchy.js"></script>
+</body>
+
+</html>

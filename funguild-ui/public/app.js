@@ -7,7 +7,17 @@ const state = {
   offset: 0,
   total: 0,
   lastDetail: null,
+  hierarchyOverrides: {},
 };
+function getParentMap() {
+  const map = {};
+  // 1. Get from DB
+  const rows = queryAll(`SELECT guid, parent_guid FROM funguild WHERE parent_guid IS NOT NULL`);
+  rows.forEach(r => map[r.guid] = r.parent_guid);
+  // 2. Overlay with MongoDB overrides
+  Object.assign(map, state.hierarchyOverrides);
+  return map;
+}
 
 const el = (id) => document.getElementById(id);
 
@@ -861,9 +871,24 @@ async function loadSqliteDb() {
 }
 
 
+async function loadHierarchyOverrides() {
+  try {
+    const res = await fetch('/api/hierarchy');
+    if (res.ok) {
+      const data = await res.json();
+      const overrides = {};
+      data.overrides.forEach(o => overrides[o.record_guid] = o.parent_guid);
+      state.hierarchyOverrides = overrides;
+    }
+  } catch (err) {
+    console.error("Failed to load hierarchy overrides:", err);
+  }
+}
+
 (async function init() {
   try {
     await loadSqliteDb();
+    await loadHierarchyOverrides();
 
     // Initial Load:
     // 1. Populate all dropdowns (with no filters active yet)
