@@ -461,9 +461,375 @@ function openModal(detail) {
   modalBackdrop.style.display = "flex";
 }
 
+// --- Comments System ---
+
+
+/**
+ * Load comments for a specific record from the API
+ * @param {string} recordGuid - The GUID of the record
+ * @returns {Promise<Array>} Array of comment objects
+ */
+async function loadComments(recordGuid) {
+  try {
+    const response = await fetch(`/api/comments?record_guid=${encodeURIComponent(recordGuid)}`);
+    if (!response.ok) {
+      console.error('Failed to load comments:', response.statusText);
+      return [];
+    }
+    const data = await response.json();
+    return data.comments || [];
+  } catch (error) {
+    console.error('Error loading comments:', error);
+    return [];
+  }
+}
+
+/**
+ * Submit a new comment for a record
+ * @param {string} recordGuid - The GUID of the record
+ * @param {string} content - The comment content
+ * @returns {Promise<Object>} The created comment object
+ */
+async function submitComment(recordGuid, content) {
+  const user = AuthService.user;
+  if (!user?.email) {
+    throw new Error('You must be logged in to comment');
+  }
+
+  const response = await fetch('/api/comments', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${user.email}`
+    },
+    body: JSON.stringify({
+      record_guid: recordGuid,
+      content: content.trim()
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to submit comment');
+  }
+
+  return response.json();
+}
+
+/**
+ * Format a date to human-readable string
+ * @param {Date|string} date - The date to format
+ * @returns {string} Formatted date string
+ */
+function formatCommentDate(date) {
+  const d = new Date(date);
+  const now = new Date();
+  const diffMs = now - d;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+
+  // Format as readable date
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+/**
+ * Render comments section in the modal
+ * @param {Array} comments - Array of comment objects
+ * @param {string} recordGuid - The GUID of the record
+ * @returns {HTMLElement} Comments section element
+ */
+function renderComments(comments, recordGuid) {
+  const section = document.createElement('div');
+  section.className = 'comments-section';
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'comments-header';
+  header.innerHTML = `
+    Comments
+    <span class="comments-count">${comments.length}</span>
+  `;
+  section.appendChild(header);
+
+  // Comments list
+  if (comments.length > 0) {
+    const list = document.createElement('div');
+    list.className = 'comments-list';
+
+    comments.forEach(comment => {
+      const card = document.createElement('div');
+      card.className = 'comment-card';
+      card.innerHTML = `
+        <div class="comment-header">
+          <span class="comment-author">${escapeHtml(comment.author_email)}</span>
+          <span class="comment-date">${formatCommentDate(comment.created_at)}</span>
+        </div>
+        <div class="comment-content">${escapeHtml(comment.content)}</div>
+      `;
+      list.appendChild(card);
+    });
+
+    section.appendChild(list);
+  } else {
+    const empty = document.createElement('div');
+    empty.className = 'comments-empty';
+    empty.textContent = 'No comments yet. Be the first to comment!';
+    section.appendChild(empty);
+  }
+
+  // Comment form or login prompt
+  if (AuthService.user) {
+    section.appendChild(renderCommentForm(recordGuid));
+  } else {
+    section.appendChild(renderLoginPrompt());
+  }
+
+  return section;
+}
+
+/**
+ * Render the comment input form
+ * @param {string} recordGuid - The GUID of the record
+ * @returns {HTMLElement} Comment form element
+ */
+function renderCommentForm(recordGuid) {
+  const form = document.createElement('div');
+  form.className = 'comment-form';
+
+  form.innerHTML = `
+    <div class="comment-form-header">Add a comment</div>
+    <div class="comment-input-wrapper">
+      <textarea 
+        class="comment-textarea" 
+        placeholder="Share your thoughts about this record..."
+        maxlength="1000"
+        id="commentTextarea-${recordGuid}"
+      ></textarea>
+      <div class="comment-char-count" id="charCount-${recordGuid}">0 / 1000</div>
+    </div>
+    <div class="comment-form-actions">
+      <div class="comment-error" id="commentError-${recordGuid}"></div>
+      <button class="comment-submit-btn" id="submitComment-${recordGuid}">
+        Post Comment
+      </button>
+    </div>
+  `;
+
+  // Add event listeners after adding to DOM
+  setTimeout(() => {
+    const textarea = document.getElementById(`commentTextarea-${recordGuid}`);
+    const charCount = document.getElementById(`charCount-${recordGuid}`);
+    const submitBtn = document.getElementById(`submitComment-${recordGuid}`);
+    const errorDiv = document.getElementById(`commentError-${recordGuid}`);
+
+    if (!textarea || !submitBtn) return;
+
+    // Character count update
+    textarea.addEventListener('input', () => {
+      const length = textarea.value.length;
+      charCount.textContent = `${length} / 1000`;
+
+      charCount.classList.remove('warning', 'error');
+      if (length > 900) charCount.classList.add('error');
+      else if (length > 800) charCount.classList.add('warning');
+    });
+
+    // Submit handler
+    submitBtn.addEventListener('click', async () => {
+      const content = textarea.value.trim();
+      errorDiv.textContent = '';
+
+      // Validation
+      if (!content) {
+        errorDiv.textContent = 'Comment cannot be empty';
+        return;
+      }
+
+      if (content.length > 1000) {
+        errorDiv.textContent = 'Comment cannot exceed 1000 characters';
+        return;
+      }
+
+      // Submit
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Posting...';
+
+      try {
+        await submitComment(recordGuid, content);
+
+        // Reload comments
+        const comments = await loadComments(recordGuid);
+
+        // Find and replace the comments section
+        const modalBody = document.getElementById('modalBody');
+        const oldSection = modalBody.querySelector('.comments-section');
+        if (oldSection) {
+          const newSection = renderComments(comments, recordGuid);
+          oldSection.replaceWith(newSection);
+        }
+      } catch (error) {
+        errorDiv.textContent = error.message || 'Failed to post comment';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Post Comment';
+      }
+    });
+  }, 0);
+
+  return form;
+}
+
+/**
+ * Render login prompt for non-authenticated users
+ * @returns {HTMLElement} Login prompt element
+ */
+function renderLoginPrompt() {
+  const prompt = document.createElement('div');
+  prompt.className = 'comment-login-prompt';
+
+  prompt.innerHTML = `
+    <p>Please log in to leave a comment</p>
+    <button class="comment-login-btn" id="commentLoginBtn">Log In</button>
+  `;
+
+  setTimeout(() => {
+    const loginBtn = prompt.querySelector('#commentLoginBtn');
+    if (loginBtn) {
+      loginBtn.addEventListener('click', () => {
+        closeModal();
+        btnAuth.click();
+      });
+    }
+  }, 0);
+
+  return prompt;
+}
+
+function openModal(detail) {
+  state.lastDetail = detail;
+  modalTitle.textContent = detail.taxon ? `${detail.taxon}` : `Record ${detail.guid}`;
+  modalBody.innerHTML = "";
+
+  // Container
+  const grid = document.createElement("div");
+  grid.className = "modal-grid";
+
+  // --- Left Column (Narrative) ---
+  const leftCol = document.createElement("div");
+  leftCol.className = "modal-col-left";
+
+  // Image Placeholder
+  const imgPlaceholder = document.createElement("div");
+  imgPlaceholder.className = "placeholder-image";
+  imgPlaceholder.textContent = "No Image";
+  leftCol.appendChild(imgPlaceholder);
+
+  // Notes
+  if (detail.notes) {
+    const notesTitle = document.createElement("span");
+    notesTitle.className = "section-title";
+    notesTitle.textContent = "Notes";
+
+    const notesBody = document.createElement("div");
+    notesBody.className = "text-block";
+    notesBody.textContent = detail.notes;
+
+    leftCol.appendChild(notesTitle);
+    leftCol.appendChild(notesBody);
+  }
+
+  // Citation Source
+  if (detail.citationSource) {
+    const citTitle = document.createElement("span");
+    citTitle.className = "section-title";
+    citTitle.textContent = "Citation Source";
+
+    const citBody = document.createElement("div");
+    citBody.className = "text-block";
+    citBody.innerHTML = renderCitationSource(detail.citationSource);
+
+    leftCol.appendChild(citTitle);
+    leftCol.appendChild(citBody);
+  }
+
+  // --- Right Column (Metadata) ---
+  const rightCol = document.createElement("div");
+  rightCol.className = "modal-col-right";
+
+  // Define fields to show in order
+  const metaFields = [
+    "taxon",
+    "guid",
+    "mbNumber",
+    "taxonomicLevel",
+    "trophicMode",
+    "guild",
+    "growthForm",
+    "confidenceRanking",
+    "trait",
+    "ingested_at"
+  ];
+
+  metaFields.forEach(key => {
+    const val = detail[key];
+    // Show only if meaningful? The prompt says "Display all remaining fields". 
+    // We will display them (showing NULL if empty is fine or we can skip empty ones).
+    // Let's stick to showing them to be explicit.
+
+    const row = document.createElement("div");
+    row.className = "kv-pair";
+
+    const label = document.createElement("div");
+    label.className = "kv-label";
+    label.textContent = key;
+
+    const value = document.createElement("div");
+    value.className = "kv-value";
+    value.textContent = (val === null || val === undefined || val === "") ? "—" : String(val);
+
+    row.appendChild(label);
+    row.appendChild(value);
+    rightCol.appendChild(row);
+  });
+
+  // Assemble
+  grid.appendChild(leftCol);
+  grid.appendChild(rightCol);
+  modalBody.appendChild(grid);
+
+  // Load and render comments (async)
+  loadComments(detail.guid).then(comments => {
+    const commentsSection = renderComments(comments, detail.guid);
+    modalBody.appendChild(commentsSection);
+  });
+
+  // Check Permissions for Edit Button
+  const btnEdit = el("btnEditRecord");
+  if (AuthService.user && state.userProfile?.can_edit) {
+    btnEdit.style.display = "block";
+    btnEdit.onclick = () => {
+      alert(`Editing Record ${detail.guid}\n\n(This would open the editor if the backend supported writes. You have permission!)`);
+    };
+  } else {
+    btnEdit.style.display = "none";
+  }
+
+  modalBackdrop.style.display = "flex";
+}
+
 function closeModal() {
   modalBackdrop.style.display = "none";
   state.lastDetail = null;
+
 }
 
 
