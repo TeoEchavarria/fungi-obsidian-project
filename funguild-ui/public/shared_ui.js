@@ -314,18 +314,173 @@ const SharedUI = (function () {
         return String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
     }
 
-    function renderCitationSource(source) {
-        if (!source) return "";
-        // Basic linkification
+    function renderCitationSource(text) {
+        if (!text) return "—";
+
+        // Regex to find potential URLs starting with http:// or https://
         const urlRegex = /(https?:\/\/[^\s]+)/g;
-        return source.replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
+
+        // Split text by URL patterns
+        const parts = text.split(urlRegex);
+
+        return parts.map((part, index) => {
+            if (index % 2 === 0) {
+                return escapeHtml(part);
+            }
+
+            let url = part;
+            let trailing = "";
+
+            while (true) {
+                const lastChar = url.slice(-1);
+                if ([".", ",", ";", "!", "?"].includes(lastChar)) {
+                    trailing = lastChar + trailing;
+                    url = url.slice(0, -1);
+                    continue;
+                }
+                if (lastChar === ")") {
+                    const openCount = (url.match(/\(/g) || []).length;
+                    const closeCount = (url.match(/\)/g) || []).length;
+                    if (closeCount > openCount) {
+                        trailing = lastChar + trailing;
+                        url = url.slice(0, -1);
+                        continue;
+                    }
+                }
+                break;
+            }
+            return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>${escapeHtml(trailing)}`;
+        }).join("");
+    }
+
+    function normalizeParentGuid(parentGuid) {
+        if (!parentGuid) return { kind: "anchor", guid: "F_0000000000_ANCHOR_FUNGI" };
+        const s = String(parentGuid).trim();
+        if (s === "" || s.toUpperCase() === "NULL") return { kind: "anchor", guid: "F_0000000000_ANCHOR_FUNGI" };
+        return { kind: "record", guid: s };
+    }
+
+    function loadDetail(guid, state) {
+        if (!state.paneManager) {
+            const laneEl = document.getElementById("noteLane");
+            state.paneManager = new PaneManager({
+                laneEl,
+                fetchRecord: (guid) => queryOne(`SELECT * FROM funguild WHERE guid = :guid LIMIT 1`, { ":guid": guid }),
+                renderRecordCard: null,
+            });
+            state.paneManager.renderRecordCard = renderRecordCardFactory(state);
+        }
+
+        const modalBackdrop = document.getElementById("modalBackdrop");
+        if (modalBackdrop.style.display !== "flex") {
+            modalBackdrop.style.display = "flex";
+            const modal = modalBackdrop.querySelector(".modal");
+            if (modal) {
+                modal.style.width = "95vw";
+                modal.style.maxWidth = "none";
+            }
+        }
+
+        state.paneManager.open(guid, 0);
+    }
+
+    function renderRecordCardFactory(state) {
+        return function renderRecordCard(rec, paneIndex) {
+            const el = document.createElement("article");
+            el.className = "note-card";
+
+            el.innerHTML = `
+      <div class="note-card__body">
+        <h2 class="record-title">${escapeHtml(rec.taxon || rec.guid)}</h2>
+        <div class="record-subtitle">
+            Level: ${escapeHtml(rec.taxonomicLevel ?? "—")} &bull; GUID: ${escapeHtml(rec.guid)}
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1.2fr; gap: 24px; margin-top: 16px;">
+          <!-- LEFT column -->
+          <section>
+            <div style="border:1px solid var(--border); border-radius:12px; height: 180px; display:flex; align-items:center; justify-content:center; color:#999; background:#f9f9f9; font-size:13px; margin-bottom:16px;">
+              Image Placeholder
+            </div>
+
+            <div class="kv">
+              <div class="k">Notes</div>
+              <div class="v" style="font-size:14px; line-height:1.5;">${escapeHtml(rec.notes ?? "—")}</div>
+            </div>
+
+            <div class="kv" style="margin-top:12px;">
+                <div class="k">Citations</div>
+                <div class="v" data-slot="citations" style="font-size:13px; color:#555;"></div>
+            </div>
+          </section>
+
+          <!-- RIGHT column -->
+          <section>
+            <div class="meta-section" style="background:rgba(0,0,0,0.02); border-radius:8px; padding:12px;">
+                ${renderMetaKV(rec)}
+            </div>
+            <div id="hierarchy-slot-${rec.guid.replace(/[^a-z0-9]/gi, '_')}"></div>
+            <div id="comments-slot-${rec.guid.replace(/[^a-z0-9]/gi, '_')}"></div>
+          </section>
+        </div>
+      </div>
+    `;
+
+            const citeSlot = el.querySelector('[data-slot="citations"]');
+            if (citeSlot) {
+                citeSlot.innerHTML = renderCitationSource(rec.citationSource);
+            }
+
+            loadComments(rec.guid).then(comments => {
+                const slot = el.querySelector(`#comments-slot-${rec.guid.replace(/[^a-z0-9]/gi, '_')}`);
+                if (slot) {
+                    slot.appendChild(renderComments(comments, rec.guid));
+                }
+            });
+
+            if (window.renderRecordCardHook) {
+                window.renderRecordCardHook(el, rec);
+            }
+
+            el.addEventListener("click", (e) => {
+                const t = e.target;
+                if (t && t.dataset && t.dataset.openGuid) {
+                    state.paneManager.open(t.dataset.openGuid, paneIndex + 1);
+                    return;
+                }
+                if (t && t.dataset && t.dataset.action === "close-pane") {
+                    state.paneManager.openStack = state.paneManager.openStack.slice(0, paneIndex);
+                    state.paneManager._renderPlaceholders();
+                    // If closing the first pane, close modal
+                    if (paneIndex === 0) closeModal();
+                }
+            });
+
+            return el;
+        };
+    }
+
+    function renderMetaKV(rec) {
+        const skip = new Set(["notes", "citationSource", "raw_json", "ingested_at", "guid", "taxon", "taxonomicLevel", "parent_guid"]);
+        const keys = Object.keys(rec).filter(k => !skip.has(k)).sort();
+        return keys.map(k => `
+    <div class="kv" style="margin-bottom:6px;">
+      <div class="k" style="font-size:11px; opacity:0.7;">${escapeHtml(k)}</div>
+      <div class="v" style="font-size:13px;">${escapeHtml(rec[k] ?? "—")}</div>
+    </div>
+  `).join("");
     }
 
     return {
         initAuthUI,
         openModal,
         closeModal,
-        escapeHtml
+        escapeHtml,
+        renderCitationSource,
+        loadDetail,
+        loadComments,
+        renderComments,
+        normalizeParentGuid
     };
 })();
 

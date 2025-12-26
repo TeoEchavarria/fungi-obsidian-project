@@ -5,6 +5,7 @@ const state = {
     table: "funguild",
     hierarchyOverrides: {},
     userProfile: null,
+    paneManager: null,
 };
 
 const el = (id) => document.getElementById(id);
@@ -171,7 +172,7 @@ function renderNodes(nodes) {
         });
 
         nodeDiv.addEventListener("click", () => {
-            SharedUI.openModal(node);
+            SharedUI.loadDetail(node.guid, state);
         });
 
         li.appendChild(nodeDiv);
@@ -181,7 +182,7 @@ function renderNodes(nodes) {
     return ul;
 }
 
-window.openModal = (detail) => SharedUI.openModal(detail);
+window.openModal = (detail) => SharedUI.loadDetail(detail.guid, state);
 window.getParentMap = () => {
     const map = {};
     const rows = queryAll(`SELECT guid, parent_guid FROM funguild WHERE parent_guid IS NOT NULL`);

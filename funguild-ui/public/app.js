@@ -8,6 +8,7 @@ const state = {
   total: 0,
   lastDetail: null,
   hierarchyOverrides: {},
+  paneManager: null,
 };
 function getParentMap() {
   const map = {};
@@ -284,12 +285,7 @@ function loadRows() {
 }
 
 async function loadDetail(guid) {
-  const row = queryOne(
-    `SELECT * FROM ${state.table} WHERE guid = :guid`,
-    { ":guid": guid }
-  );
-  if (!row) return;
-  openModal(row);
+  SharedUI.loadDetail(guid, state);
 }
 
 

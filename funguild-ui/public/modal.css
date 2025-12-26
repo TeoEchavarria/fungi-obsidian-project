@@ -289,4 +289,103 @@
     .kv-pair {
         grid-template-columns: 120px 1fr;
     }
+
+    /* Mobile: stack panes vertically instead of horizontal lanes */
+    .note-lane {
+        grid-auto-flow: row !important;
+        grid-auto-columns: unset !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        scroll-snap-type: none !important;
+    }
+
+    .note-card__body {
+        max-height: unset !important;
+    }
+}
+
+/* --- Lane type Matuschak --- */
+.note-lane {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(320px, 440px);
+    gap: 14px;
+    padding: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    align-items: start;
+    height: 100%;
+}
+
+.note-card {
+    scroll-snap-align: start;
+    border: 1px solid #e7e7e7;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .06);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.note-card__body {
+    padding: 16px;
+    max-height: calc(85vh - 40px);
+    overflow: auto;
+}
+
+.record-title {
+    font-size: 24px;
+    font-weight: 750;
+    margin: 0 0 4px 0;
+    line-height: 1.1;
+    color: #111;
+}
+
+.record-subtitle {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 20px;
+}
+
+.parent-link {
+    color: #0066cc;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.parent-link:hover {
+    text-decoration: underline;
+}
+
+.linklike {
+    border: 0;
+    background: transparent;
+    color: #111;
+    padding: 0;
+    text-decoration: underline;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+.kv {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px dashed #eee;
+}
+
+.k {
+    font-size: 12px;
+    color: #666;
+}
+
+.v {
+    font-size: 13px;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
