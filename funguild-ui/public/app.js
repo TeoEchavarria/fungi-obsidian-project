@@ -265,10 +265,10 @@ function loadRows() {
   for (const r of rows) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${escapeHtml(r.taxon ?? "")}</td>
-      <td>${escapeHtml(r.trophicMode ?? "")}</td>
-      <td>${escapeHtml(r.growthForm ?? "")}</td>
-      <td>${escapeHtml(r.guild ?? "")}</td>
+      <td data-label="Taxon">${escapeHtml(r.taxon ?? "")}</td>
+      <td data-label="TrophicMode">${escapeHtml(r.trophicMode ?? "")}</td>
+      <td data-label="GrowthForm">${escapeHtml(r.growthForm ?? "")}</td>
+      <td data-label="Guild">${escapeHtml(r.guild ?? "")}</td>
     `;
     tr.addEventListener("click", () => loadDetail(r.guid));
     tbody.appendChild(tr);

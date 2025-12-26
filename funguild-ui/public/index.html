@@ -1,114 +1,505 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Fungal Guild DB (SQLite in Browser)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <title>Fungal Guild DB</title>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 0; }
-    header { padding: 12px 16px; border-bottom: 1px solid #ddd; display:flex; justify-content:space-between; align-items:center; gap: 12px; }
-    header h1 { font-size: 16px; margin: 0; }
-    .wrap { padding: 16px; }
-    .filters { display:grid; grid-template-columns: 2fr 1fr 1fr 2fr auto; gap: 10px; align-items:end; }
-    label { font-size: 12px; color: #333; display:block; margin-bottom: 4px; }
-    input, select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 10px; }
-    button { padding: 9px 12px; border: 1px solid #111; background: #111; color: #fff; border-radius: 10px; cursor:pointer; }
-    button.secondary { background:#fff; color:#111; }
-    .meta { margin-top: 10px; font-size: 12px; color:#555; display:flex; justify-content:space-between; gap: 10px; flex-wrap:wrap; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-    th, td { text-align: left; padding: 10px; border-bottom: 1px solid #eee; }
-    th { font-size: 12px; color:#444; }
-    tr:hover { background:#fafafa; cursor:pointer; }
-    .pager { display:flex; gap: 8px; align-items:center; }
-    .pill { padding: 4px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; }
+    /* --- Base Variables & Reset --- */
+    :root {
+      --primary: #111;
+      --bg: #fff;
+      --bg-alt: #f8f9fa;
+      --border: #e0e0e0;
+      --text: #333;
+      --text-sub: #666;
+      --radius: 8px;
+    }
 
-    /* modal */
-    .modal-backdrop { position: fixed; inset:0; background: rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; padding: 18px; }
-    .modal { width: min(900px, 100%); background:#fff; border-radius: 16px; overflow:hidden; box-shadow: 0 20px 80px rgba(0,0,0,.35); }
-    .modal-header { padding: 12px 14px; border-bottom: 1px solid #eee; display:flex; justify-content:space-between; gap: 10px; align-items:center; }
-    .modal-header strong { font-size: 14px; }
-    .modal-body { padding: 14px; max-height: 70vh; overflow:auto; }
-    .kv { display:grid; grid-template-columns: 220px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px dashed #eee; }
-    .k { color:#555; font-size:12px; }
-    .v { white-space: pre-wrap; word-break: break-word; }
-    .modal-actions { display:flex; gap: 8px; }
-    .status { font-size: 12px; color: #333; }
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      color: var(--text);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* --- Header --- */
+    header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fff;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    header h1 {
+      font-size: 18px;
+      margin: 0;
+      font-weight: 700;
+    }
+
+    .status {
+      font-size: 13px;
+      color: var(--text-sub);
+    }
+
+    /* --- Layout --- */
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    /* --- Filters Section --- */
+    .filter-toggle {
+      display: none;
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 12px;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      text-align: left;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .filters {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr) auto;
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 20px;
+    }
+
+    .filter-item label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-sub);
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 14px;
+      background: #fff;
+    }
+
+    input:focus,
+    select:focus {
+      outline: 2px solid var(--primary);
+      border-color: transparent;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      padding: 10px 16px;
+      border: 1px solid var(--primary);
+      background: var(--primary);
+      color: #fff;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 14px;
+      transition: opacity 0.2s;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    button.secondary {
+      background: #fff;
+      color: var(--primary);
+    }
+
+    /* --- Meta / Pagination --- */
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .pill {
+      font-size: 13px;
+      color: var(--text-sub);
+      background: var(--bg-alt);
+      padding: 4px 10px;
+      border-radius: 99px;
+    }
+
+    .pager {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* --- Table (Desktop) --- */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th {
+      text-align: left;
+      padding: 12px 16px;
+      border-bottom: 2px solid var(--border);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-sub);
+    }
+
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    tr {
+      transition: background 0.1s;
+      cursor: pointer;
+    }
+
+    tr:hover {
+      background: var(--bg-alt);
+    }
+
+    /* --- Modal --- */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      backdrop-filter: blur(2px);
+    }
+
+    .modal {
+      width: min(800px, 90vw);
+      max-height: 85vh;
+      background: #fff;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    }
+
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-header strong {
+      font-size: 16px;
+    }
+
+    .modal-body {
+      padding: 0;
+      overflow-y: auto;
+      flex: 1;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .kv-list {
+      padding: 20px;
+    }
+
+    .kv {
+      margin-bottom: 16px;
+    }
+
+    .kv:last-child {
+      margin-bottom: 0;
+    }
+
+    .k {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-sub);
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .v {
+      font-size: 15px;
+      line-height: 1.6;
+      word-break: break-word;
+      color: var(--text);
+    }
+
+    .v a {
+      color: #0066cc;
+      text-decoration: none;
+    }
+
+    .v a:hover {
+      text-decoration: underline;
+    }
+
+    /* --- Mobile Responsive Rules --- */
+    @media (max-width: 768px) {
+      .wrap {
+        padding: 12px;
+      }
+
+      /* Filters stack vertically */
+      .filter-toggle {
+        display: block;
+      }
+
+      .filters {
+        display: none;
+        grid-template-columns: 1fr;
+        gap: 16px;
+        background: var(--bg-alt);
+        padding: 16px;
+        border-radius: var(--radius);
+        margin-top: -8px;
+      }
+
+      .filters.open {
+        display: grid;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        width: 100%;
+        margin-top: 8px;
+      }
+
+      .actions button {
+        width: 100%;
+        justify-content: center;
+      }
+
+      /* Table to Card Transformation */
+      thead {
+        display: none;
+      }
+
+      table,
+      tbody,
+      tr,
+      td {
+        display: block;
+        width: 100%;
+      }
+
+      tr {
+        margin-bottom: 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        overflow: hidden;
+      }
+
+      tr:hover {
+        background: #fff;
+        transform: translateY(-1px);
+        transition: transform 0.2s;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      td {
+        padding: 10px 14px;
+        border-bottom: 1px solid #f0f0f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        text-align: right;
+        white-space: normal;
+      }
+
+      td:last-child {
+        border-bottom: none;
+      }
+
+      /* Add labels via data-label */
+      td::before {
+        content: attr(data-label);
+        font-size: 11px;
+        color: var(--text-sub);
+        text-transform: uppercase;
+        font-weight: 700;
+        margin-right: 12px;
+        text-align: left;
+        flex-shrink: 0;
+      }
+
+      /* Special styling for Taxon (primary field) */
+      td[data-label="Taxon"] {
+        font-weight: 700;
+        font-size: 16px;
+        color: var(--primary);
+        background: #fafafa;
+        display: block;
+        text-align: left;
+      }
+
+      td[data-label="Taxon"]::before {
+        display: none;
+      }
+
+      /* Hide label for the title */
+
+      /* Pagination */
+      .meta {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+      }
+
+      .pager button {
+        flex: 1;
+        padding: 12px;
+        font-size: 16px;
+      }
+
+      /* Modal Mobile */
+      .modal-backdrop {
+        align-items: flex-end;
+      }
+
+      /* Bottom sheet alignment? Or just center is fine. Let's stick to full screen or center but safer margins. */
+      .modal {
+        width: 100%;
+        height: 90vh;
+        max-height: 90vh;
+        border-radius: 16px 16px 0 0;
+      }
+
+      .modal-header {
+        position: sticky;
+        top: 0;
+        background: #fff;
+        z-index: 10;
+        border-radius: 16px 16px 0 0;
+      }
+    }
   </style>
 </head>
 
 <body>
-<header>
-  <h1>Fungal Guild DB</h1>
-  <div class="status" id="status">Loading…</div>
-</header>
+  <header>
+    <h1>Fungal Guild DB</h1>
+    <div class="status" id="status">Loading…</div>
+  </header>
 
-<div class="wrap">
-  <div class="filters">
-    <div>
-      <label>Taxon (contains)</label>
-      <input id="fTaxon" type="text" placeholder="e.g. Abrothallus" />
-    </div>
-    <div>
-      <label>TrophicMode</label>
-      <select id="fTrophicMode">
-        <option value="">(Any)</option>
-      </select>
-    </div>
-    <div>
-      <label>GrowthForm</label>
-      <select id="fGrowthForm">
-        <option value="">(Any)</option>
-      </select>
-    </div>
-    <div>
-      <label>Guild</label>
-      <select id="fGuild">
-        <option value="">(Any)</option>
-      </select>
-    </div>
-    <div style="display:flex; gap:8px;">
-      <button id="btnApply">Apply</button>
-      <button id="btnReset" class="secondary">Reset</button>
-    </div>
-  </div>
+  <div class="wrap">
+    <!-- Mobile Filter Toggle -->
+    <button class="filter-toggle" id="btnToggleFilters">Filter Options ▼</button>
 
-  <div class="meta">
-    <div class="pill" id="metaText">—</div>
-    <div class="pager">
-      <button id="btnPrev" class="secondary">Prev</button>
-      <button id="btnNext" class="secondary">Next</button>
-    </div>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Taxon</th>
-        <th>TrophicMode</th>
-        <th>GrowthForm</th>
-        <th>Guild</th>
-      </tr>
-    </thead>
-    <tbody id="tbody"></tbody>
-  </table>
-</div>
-
-<!-- Modal -->
-<div class="modal-backdrop" id="modalBackdrop">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-    <div class="modal-header">
-      <strong id="modalTitle">Record</strong>
-      <div class="modal-actions">
-        <button id="btnCopy" class="secondary">Copy JSON</button>
-        <button id="btnClose">Close</button>
+    <div class="filters" id="filtersContainer">
+      <div class="filter-item">
+        <label>Taxon</label>
+        <input id="fTaxon" type="text" placeholder="Search taxon..." />
+      </div>
+      <div class="filter-item">
+        <label>TrophicMode</label>
+        <select id="fTrophicMode">
+          <option value="">(Any)</option>
+        </select>
+      </div>
+      <div class="filter-item">
+        <label>GrowthForm</label>
+        <select id="fGrowthForm">
+          <option value="">(Any)</option>
+        </select>
+      </div>
+      <div class="filter-item">
+        <label>Guild</label>
+        <select id="fGuild">
+          <option value="">(Any)</option>
+        </select>
+      </div>
+      <div class="actions">
+        <button id="btnApply">Apply</button>
+        <button id="btnReset" class="secondary">Reset</button>
       </div>
     </div>
-    <div class="modal-body" id="modalBody"></div>
-  </div>
-</div>
 
-<!-- sql.js loader (local file copied from node_modules/sql.js/dist/) -->
-<script src="./sql-wasm.js"></script>
-<script src="./app.js"></script>
+    <div class="meta">
+      <div class="pill" id="metaText">—</div>
+      <div class="pager">
+        <button id="btnPrev" class="secondary">Previous</button>
+        <button id="btnNext" class="secondary">Next</button>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Taxon</th>
+          <th>TrophicMode</th>
+          <th>GrowthForm</th>
+          <th>Guild</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <strong id="modalTitle">Details</strong>
+        <div class="actions">
+          <button id="btnCopy" class="secondary" style="padding:6px 12px; font-size:12px;">Copy JSON</button>
+          <button id="btnClose" style="padding:6px 12px; font-size:12px;">Close</button>
+        </div>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <!-- Generated content goes here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- sql.js loader -->
+  <script src="./sql-wasm.js"></script>
+  <script src="./app.js"></script>
+  <script>
+    // Simple toggle for mobile filters
+    document.getElementById('btnToggleFilters').addEventListener('click', function () {
+      document.getElementById('filtersContainer').classList.toggle('open');
+      this.textContent = document.getElementById('filtersContainer').classList.contains('open')
+        ? 'Hide Filters ▲'
+        : 'Filter Options ▼';
+    });
+  </script>
 </body>
+
 </html>
