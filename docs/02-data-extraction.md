@@ -28,21 +28,25 @@ The `ingest_funguild.py` script is a production-quality Python 3.11+ tool that:
 
 ### Basic Usage
 
+#### FUNGuild (Fungi)
 ```bash
 # Fetch all data and populate database
 python ingest_funguild.py
 
 # Dry run (fetch and parse but don't write to database)
 python ingest_funguild.py --dry-run
+```
 
-# Limit to first 100 records (for testing)
-python ingest_funguild.py --limit 100
+#### NemaGuild (Nematodes)
+```bash
+# Fetch all records and merge duplicates/citations
+python ingest_nemaguild.py
 
-# Custom database path
-python ingest_funguild.py --out ./custom_path.sqlite
+# Dry run
+python ingest_nemaguild.py --dry-run
 
-# View all options
-python ingest_funguild.py --help
+# Limit records
+python ingest_nemaguild.py --limit 100
 ```
 
 ### Command-Line Options
@@ -77,7 +81,7 @@ normalize_record(rec) -> Optional[Dict]
 ```
 
 For each record:
-- Validates required field (GUID)
+- Validates required field (GUID for fungi, taxon for nematodes)
 - Converts "NULL" strings to None
 - Casts numeric fields (e.g., taxonomicLevel to integer)
 - Adds metadata (raw_json, ingested_at timestamp)
@@ -91,7 +95,8 @@ upsert_many(conn, table, records) -> (inserted, updated)
 ```
 
 - Creates table and indexes if they don't exist
-- Identifies existing records by GUID
+- Identifies existing records by unique key (GUID for funghi, Taxon for nematodes)
+- For NemaGuild, intelligently merges citation sources for duplicates
 - Performs batch upsert operation
 - Returns counts of inserted vs updated records
 

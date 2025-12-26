@@ -11,10 +11,14 @@ The FunGuild Obsidian Project uses data from the **FUNGuild** (Fungi Functional 
    - Contains the source code and documentation for the FUNGuild project
    - Provides the Python module for guild assignment
 
-2. **Database API**: [http://www.stbates.org/funguild_db.php](http://www.stbates.org/funguild_db.php)
-   - Public HTTP endpoint that returns the complete FUNGuild database
+2. **Database API (Fungi)**: [http://www.stbates.org/funguild_db.php](http://www.stbates.org/funguild_db.php)
+   - Public HTTP endpoint for the complete FUNGuild database
    - Returns data in JSON format
-   - Updated periodically by the FUNGuild maintainers
+
+3. **Database API (Nematodes)**: [http://www.stbates.org/nemaguild_db.php](http://www.stbates.org/nemaguild_db.php)
+   - Public HTTP endpoint for the complete NEMAGuild database
+   - Used for nematode (roundworm) ecological classification
+   - Follows the same JSON structure as FUNGuild
 
 ## What is FUNGuild?
 

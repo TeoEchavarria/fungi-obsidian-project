@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
-ingest_funguild.py
+ingest_nemaguild.py
 
-A production-quality Python 3.11+ ingestion script that:
-1. Downloads the Funguild dataset (JSON array) from a URL.
+A production-quality Python 3.11+ ingestion script for NemaGuild database that:
+1. Downloads the NemaGuild dataset (JSON array) from a URL.
 2. Robustly interprets the response (JSON or mixed text/HTML).
 3. Normalizes fields (handling "NULL" strings, type casting).
-4. Upserts records into a local SQLite database using atomic transactions.
+4. Identifies duplicates based on taxon name.
+5. Merges citation sources for duplicates.
+6. Upserts records into a local SQLite database using atomic transactions.
 
 Usage:
-    python ingest_funguild.py --help
-    python ingest_funguild.py --dry-run
-    python ingest_funguild.py --limit 100
+    python ingest_nemaguild.py --help
+    python ingest_nemaguild.py --dry-run
+    python ingest_nemaguild.py --limit 100
 """
 
 import argparse
@@ -22,17 +24,17 @@ import re
 import sqlite3
 import sys
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Set
 
 import requests
 
 # --- Configuration & Defaults ---
 
-DEFAULT_URL = "http://www.stbates.org/funguild_db.php"
+DEFAULT_URL = "http://www.stbates.org/nemaguild_db.php"
 DEFAULT_DB_PATH = "./funguild.sqlite"
-DEFAULT_TABLE = "funguild"
+DEFAULT_TABLE = "nemaguild"
 DEFAULT_TIMEOUT = 30
-DEFAULT_USER_AGENT = "funguild-ingestor/1.0"
+DEFAULT_USER_AGENT = "nemaguild-ingestor/1.0"
 
 # Configure logging
 logging.basicConfig(
@@ -87,38 +89,10 @@ def extract_json_array(text: str) -> Optional[List[Dict[str, Any]]]:
     """
     Scans the text for the first valid JSON array `[...]`.
     """
-    # Simple heuristic: find first '[' and last ']'
-    start_candidates = [m.start() for m in re.finditer(r'\[', text)]
-    
-    if not start_candidates:
-        return None
-
-    # Try from the first '['
-    # In a more complex scenario, we might iterate all candidates. 
-    # For now, we assume the main payload is the *first* array or the *largest* array.
-    # Given the requirements, we'll try to find the outermost valid one starting at the first '['.
-    
-    # We will try to parse from first candidate start index to the last ']'
-    # If that fails, we might just look for the largest structure.
-    
-    # Let's try a robust approach: find first '[' and try to match brackets?
-    # Actually, json.loads allows trailing data if we slice correctly.
-    # But python's json.loads needs the exact string.
-    
-    # Strategy: Find first '['. Then look for last ']'. Try loads.
-    # If fail, back off the end index to previous ']'.
-    
     first_open = text.find('[')
     if first_open == -1:
         return None
 
-    # We'll try from the end backwards
-    # This is O(N) where N is number of closing brackets
-    
-    candidate_text = text[first_open:]
-    # Optimization: just try strictly finding the matching closing bracket is hard without a parser.
-    # Let's try the simple approach first: strictly between first '[' and last ']'.
-    
     last_close = text.rfind(']')
     if last_close == -1 or last_close < first_open:
         return None
@@ -132,24 +106,14 @@ def extract_json_array(text: str) -> Optional[List[Dict[str, Any]]]:
     except json.JSONDecodeError:
         pass
         
-    # If that failed, it might be that there's garbage *inside* or the bracket matching is wrong.
-    # Let's try a regex solution for "non-greedy" match if the above failed, 
-    # but for a potentially huge dataset regex might be slow or hit recursion limits.
-    # A standard "mixed content" usually has Header... [ JSON ] ... Footer.
-    
-    # Let's try iteratively shrinking from the back if the first attempt failed.
-    # (Just a few attempts to avoid hanging)
-    # We will look for other ']' positions.
-    
+    # Try iteratively shrinking from the back
     matches = [m.start() for m in re.finditer(r'\]', text)]
-    # Reverse to start from end
     matches.sort(reverse=True)
     
     for end_pos in matches:
         if end_pos < first_open:
             break
         
-        # We already tried the very last one above (roughly), but let's be rigorous
         sub = text[first_open : end_pos + 1]
         try:
             data = json.loads(sub)
@@ -161,21 +125,40 @@ def extract_json_array(text: str) -> Optional[List[Dict[str, Any]]]:
     return None
 
 
+def merge_citations(citations: List[str]) -> str:
+    """
+    Merges multiple citation sources into a single string.
+    Removes duplicates and joins with semicolon.
+    """
+    # Split individual citations (they might already be combined with ||)
+    all_citations = []
+    for cit in citations:
+        if not cit:
+            continue
+        # Split by common separators
+        parts = re.split(r'\s*(?:\|\||;)\s*', cit)
+        all_citations.extend(parts)
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_citations = []
+    for cit in all_citations:
+        cit = cit.strip()
+        if cit and cit not in seen:
+            seen.add(cit)
+            unique_citations.append(cit)
+    
+    return " || ".join(unique_citations)
+
+
 def normalize_record(rec: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Normalizes a raw record:
-    - Checks required field 'guid'. If missing/empty, returns None.
+    - Checks required field 'taxon'. If missing/empty, returns None.
     - Converts "NULL" strings to None.
     - Casts numeric fields.
     - Adds metadata fields (raw_json, ingested_at).
     """
-    # 1. Check GUID
-    guid = rec.get("guid")
-    if not guid or (isinstance(guid, str) and not guid.strip()):
-        return None  # Skip
-
-    norm = {}
-    
     # Helper to treat "NULL" string as None
     def clean_str(val: Any) -> Optional[str]:
         if val is None:
@@ -185,9 +168,16 @@ def normalize_record(rec: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             return None
         return s
 
+    # 1. Check taxon (required field for nematodes)
+    taxon = clean_str(rec.get("taxon"))
+    if not taxon:
+        return None  # Skip
+
+    norm = {}
+    
     # 2. Extract and Normalize fields
-    norm['guid'] = str(guid).strip()
-    norm['taxon'] = clean_str(rec.get("taxon"))
+    norm['taxon'] = taxon
+    norm['guid'] = clean_str(rec.get("guid"))
     norm['mbNumber'] = clean_str(rec.get("mbNumber"))
     
     # taxonomicLevel: cast to int if possible
@@ -209,27 +199,72 @@ def normalize_record(rec: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     norm['citationSource'] = clean_str(rec.get("citationSource"))
 
     # 3. Metadata
-    # We store the *original* record as received in raw_json
     norm['raw_json'] = json.dumps(rec, ensure_ascii=False)
     norm['ingested_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     return norm
 
 
+def find_duplicates(records: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Groups records by taxon name to identify duplicates.
+    Returns a dictionary mapping taxon -> list of records.
+    """
+    duplicates = {}
+    for rec in records:
+        taxon = rec['taxon']
+        if taxon not in duplicates:
+            duplicates[taxon] = []
+        duplicates[taxon].append(rec)
+    
+    return duplicates
+
+
+def merge_duplicate_records(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Merges a list of duplicate records into a single record.
+    Strategy:
+    - Keep the most recent record as base
+    - Merge all citation sources
+    - Prefer non-null values
+    """
+    if len(records) == 1:
+        return records[0]
+    
+    # Sort by ingested_at to get the most recent first
+    sorted_records = sorted(records, key=lambda x: x['ingested_at'], reverse=True)
+    merged = sorted_records[0].copy()
+    
+    # Collect all citation sources
+    citations = []
+    for rec in sorted_records:
+        if rec.get('citationSource'):
+            citations.append(rec['citationSource'])
+    
+    if citations:
+        merged['citationSource'] = merge_citations(citations)
+    
+    # For other fields, prefer non-null values from newer records
+    for rec in sorted_records[1:]:
+        for key in ['guild', 'notes', 'trait', 'confidenceRanking', 
+                    'trophicMode', 'growthForm', 'guid', 'mbNumber']:
+            if not merged.get(key) and rec.get(key):
+                merged[key] = rec[key]
+    
+    return merged
+
+
 def init_db(conn: sqlite3.Connection, table: str) -> None:
     """
     Creates the table and indexes if they don't exist.
     """
-    # Safe parametrization for table name is not supported by sqlite3 execute parameters (only values).
-    # Since 'table' comes from trusted CLI args (or default), we format it in. 
-    # But we validate it strictly to be safe.
     if not re.match(r'^[a-zA-Z0-9_]+$', table):
         raise ValueError(f"Invalid table name: {table}")
 
     ddl = f"""
     CREATE TABLE IF NOT EXISTS {table} (
-        guid TEXT PRIMARY KEY,
-        taxon TEXT,
+        taxon TEXT PRIMARY KEY,
+        guid TEXT,
         mbNumber TEXT,
         taxonomicLevel INTEGER,
         trophicMode TEXT,
@@ -245,11 +280,11 @@ def init_db(conn: sqlite3.Connection, table: str) -> None:
     """
     
     indexes = [
-        f"CREATE INDEX IF NOT EXISTS idx_{table}_taxon ON {table} (taxon);",
         f"CREATE INDEX IF NOT EXISTS idx_{table}_mbNumber ON {table} (mbNumber);",
         f"CREATE INDEX IF NOT EXISTS idx_{table}_trophicMode ON {table} (trophicMode);",
         f"CREATE INDEX IF NOT EXISTS idx_{table}_guild ON {table} (guild);",
-        f"CREATE INDEX IF NOT EXISTS idx_{table}_confidenceRanking ON {table} (confidenceRanking);"
+        f"CREATE INDEX IF NOT EXISTS idx_{table}_confidenceRanking ON {table} (confidenceRanking);",
+        f"CREATE INDEX IF NOT EXISTS idx_{table}_growthForm ON {table} (growthForm);"
     ]
 
     with conn:
@@ -258,63 +293,104 @@ def init_db(conn: sqlite3.Connection, table: str) -> None:
             conn.execute(idx)
 
 
-def get_existing_guids(conn: sqlite3.Connection, table: str, guids: List[str]) -> set:
+def get_existing_taxa(conn: sqlite3.Connection, table: str, taxa: List[str]) -> Dict[str, Dict[str, Any]]:
     """
-    Returns a set of guids from the input list that already exist in the DB.
-    Used for statistics (inserted vs updated).
-    Done in chunks to avoid variable limit issues.
+    Returns a dictionary of existing records from the database for the given taxa.
+    Used for duplicate detection and citation merging.
     """
-    # Sanitize table again just in case
     if not re.match(r'^[a-zA-Z0-9_]+$', table):
         raise ValueError(f"Invalid table name: {table}")
 
-    existing = set()
-    chunk_size = 900  # SQLite limit is usually 999 or higher variables
+    existing = {}
+    chunk_size = 900
     
-    for i in range(0, len(guids), chunk_size):
-        chunk = guids[i : i + chunk_size]
+    for i in range(0, len(taxa), chunk_size):
+        chunk = taxa[i : i + chunk_size]
         placeholders = ','.join(['?'] * len(chunk))
-        query = f"SELECT guid FROM {table} WHERE guid IN ({placeholders})"
+        query = f"""
+        SELECT taxon, guid, mbNumber, taxonomicLevel, trophicMode, guild, 
+               confidenceRanking, growthForm, trait, notes, citationSource, 
+               raw_json, ingested_at
+        FROM {table} WHERE taxon IN ({placeholders})
+        """
         
         cursor = conn.execute(query, chunk)
         for row in cursor:
-            existing.add(row[0])
+            existing[row[0]] = {
+                'taxon': row[0],
+                'guid': row[1],
+                'mbNumber': row[2],
+                'taxonomicLevel': row[3],
+                'trophicMode': row[4],
+                'guild': row[5],
+                'confidenceRanking': row[6],
+                'growthForm': row[7],
+                'trait': row[8],
+                'notes': row[9],
+                'citationSource': row[10],
+                'raw_json': row[11],
+                'ingested_at': row[12]
+            }
             
     return existing
 
 
-def upsert_many(conn: sqlite3.Connection, table: str, records: List[Dict[str, Any]]) -> Tuple[int, int]:
+def upsert_many(conn: sqlite3.Connection, table: str, records: List[Dict[str, Any]]) -> Tuple[int, int, int]:
     """
     Upserts records in a single transaction.
-    Returns (inserted_count, updated_count).
+    For existing records, merges citation sources.
+    Returns (inserted_count, updated_count, merged_citations_count).
     """
     if not records:
-        return 0, 0
+        return 0, 0, 0
 
     if not re.match(r'^[a-zA-Z0-9_]+$', table):
         raise ValueError(f"Invalid table name: {table}")
 
-    # 1. Identify which are updates vs inserts for stats
-    #    (This adds overhead but meets the requirement to report counts)
-    guids = [r['guid'] for r in records]
-    existing_guids = get_existing_guids(conn, table, guids)
+    # 1. Get existing records
+    taxa = [r['taxon'] for r in records]
+    existing_records = get_existing_taxa(conn, table, taxa)
     
-    updated_count = len(existing_guids)
-    inserted_count = len(records) - updated_count
-
-    # 2. Perform Upsert
+    inserted_count = 0
+    updated_count = 0
+    merged_citations_count = 0
+    
+    # 2. Process each record
+    processed_records = []
+    for rec in records:
+        taxon = rec['taxon']
+        
+        if taxon in existing_records:
+            # Merge with existing
+            existing = existing_records[taxon]
+            merged = merge_duplicate_records([existing, rec])
+            
+            # Check if citations were actually merged
+            old_citations = existing.get('citationSource', '')
+            new_citations = merged.get('citationSource', '')
+            if old_citations != new_citations:
+                merged_citations_count += 1
+                logger.info(f"Merging citations for '{taxon}'")
+            
+            processed_records.append(merged)
+            updated_count += 1
+        else:
+            processed_records.append(rec)
+            inserted_count += 1
+    
+    # 3. Perform Upsert
     sql = f"""
     INSERT INTO {table} (
-        guid, taxon, mbNumber, taxonomicLevel, trophicMode, guild, 
+        taxon, guid, mbNumber, taxonomicLevel, trophicMode, guild, 
         confidenceRanking, growthForm, trait, notes, citationSource, 
         raw_json, ingested_at
     ) VALUES (
-        :guid, :taxon, :mbNumber, :taxonomicLevel, :trophicMode, :guild, 
+        :taxon, :guid, :mbNumber, :taxonomicLevel, :trophicMode, :guild, 
         :confidenceRanking, :growthForm, :trait, :notes, :citationSource, 
         :raw_json, :ingested_at
     )
-    ON CONFLICT(guid) DO UPDATE SET
-        taxon=excluded.taxon,
+    ON CONFLICT(taxon) DO UPDATE SET
+        guid=excluded.guid,
         mbNumber=excluded.mbNumber,
         taxonomicLevel=excluded.taxonomicLevel,
         trophicMode=excluded.trophicMode,
@@ -328,14 +404,13 @@ def upsert_many(conn: sqlite3.Connection, table: str, records: List[Dict[str, An
         ingested_at=excluded.ingested_at;
     """
 
-    # We rely on 'with conn' in the caller or here for transaction
-    conn.executemany(sql, records)
+    conn.executemany(sql, processed_records)
     
-    return inserted_count, updated_count
+    return inserted_count, updated_count, merged_citations_count
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Ingest Funguild data into SQLite.")
+    parser = argparse.ArgumentParser(description="Ingest NemaGuild data into SQLite.")
     parser.add_argument("--url", default=DEFAULT_URL, help="Source URL")
     parser.add_argument("--out", default=DEFAULT_DB_PATH, help="Output SQLite file path")
     parser.add_argument("--table", default=DEFAULT_TABLE, help="Target table name")
@@ -359,25 +434,43 @@ def main() -> int:
 
     # 3. Normalize
     valid_records = []
-    skipped_missing_guid = 0
+    skipped_missing_taxon = 0
     
     for item in raw_data:
         normalized = normalize_record(item)
         if normalized:
             valid_records.append(normalized)
         else:
-            skipped_missing_guid += 1
+            skipped_missing_taxon += 1
 
-    total_valid = len(valid_records)
-    logger.info(f"Fetched {total_fetched} records. Valid: {total_valid}. Skipped (no guid): {skipped_missing_guid}.")
+    # 4. Find and merge duplicates within the fetched data
+    duplicate_groups = find_duplicates(valid_records)
+    
+    merged_records = []
+    internal_duplicates = 0
+    
+    for taxon, recs in duplicate_groups.items():
+        if len(recs) > 1:
+            internal_duplicates += len(recs) - 1
+            logger.info(f"Found {len(recs)} duplicate records for '{taxon}' in fetched data")
+            merged = merge_duplicate_records(recs)
+            merged_records.append(merged)
+        else:
+            merged_records.append(recs[0])
+    
+    total_valid = len(merged_records)
+    logger.info(f"Fetched {total_fetched} records. Valid: {total_valid}. "
+                f"Skipped (no taxon): {skipped_missing_taxon}. "
+                f"Internal duplicates merged: {internal_duplicates}.")
 
     inserted = 0
     updated = 0
+    merged_citations = 0
 
     if args.dry_run:
         logger.info("Dry run enabled. Skipping DB operations.")
     else:
-        # 4. Ingest
+        # 5. Ingest
         logger.info(f"Connecting to {args.out}...")
         try:
             conn = sqlite3.connect(args.out)
@@ -387,8 +480,8 @@ def main() -> int:
             
             init_db(conn, args.table)
             
-            with conn: # Transaction configuration
-                inserted, updated = upsert_many(conn, args.table, valid_records)
+            with conn:
+                inserted, updated, merged_citations = upsert_many(conn, args.table, merged_records)
             
             conn.close()
             logger.info("Database ingestion complete.")
@@ -400,19 +493,21 @@ def main() -> int:
     elapsed_time = time.perf_counter() - start_time
 
     # Summary
-    print("\n--- Ingestion Summary ---")
-    print(f"Total Records Fetched: {total_fetched}")
-    print(f"Processing Limited To: {args.limit if args.limit else 'All'}")
-    print(f"Total Valid Records:   {total_valid}")
-    print(f"Skipped (No GUID):     {skipped_missing_guid}")
+    print("\n--- NemaGuild Ingestion Summary ---")
+    print(f"Total Records Fetched:      {total_fetched}")
+    print(f"Processing Limited To:      {args.limit if args.limit else 'All'}")
+    print(f"Total Valid Records:        {total_valid}")
+    print(f"Skipped (No Taxon):         {skipped_missing_taxon}")
+    print(f"Internal Duplicates Merged: {internal_duplicates}")
     if not args.dry_run:
-        print(f"Inserted:              {inserted}")
-        print(f"Updated:               {updated}")
-        print(f"Database File:         {args.out}")
+        print(f"Inserted:                   {inserted}")
+        print(f"Updated:                    {updated}")
+        print(f"Citations Merged:           {merged_citations}")
+        print(f"Database File:              {args.out}")
     else:
-        print("Mode:                  DRY-RUN (No DB changes)")
-    print(f"Elapsed Time:          {elapsed_time:.2f} seconds")
-    print("-------------------------\n")
+        print("Mode:                       DRY-RUN (No DB changes)")
+    print(f"Elapsed Time:               {elapsed_time:.2f} seconds")
+    print("------------------------------------\n")
 
     return 0
 
